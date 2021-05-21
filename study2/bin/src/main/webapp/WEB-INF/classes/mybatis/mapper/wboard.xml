@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="wboard">
+	<select id="wboard_seq" resultType="Integer">
+		SELECT wboard_seq.NEXTVAL FROM dual
+	</select>
+	
+	<sql id="where-list">
+		<if test="condition=='all'">
+			( INSTR(content, #{keyword}) &gt; 0 OR INSTR(title, #{keyword}) &gt; 0 )
+		</if>
+		<if test="condition=='content'">
+			( INSTR(content, #{keyword}) &gt; 0 )
+		</if>
+		<if test="condition=='title'">
+			( INSTR(title, #{keyword}) &gt; 0 )
+		</if>
+		<if test="condition=='name'">
+			( INSTR(name, #{keyword}) &gt; 0 )
+		</if>
+		<if test="condition=='reg_date'">
+			( TO_CHAR(reg_date, 'YYYYMMDD') = ${keyword} OR TO_CHAR(reg_date, 'YYYY-MM-DD') = ${keyword} )
+		</if>
+	</sql>
+
+	<insert id="insertBoard" parameterType="com.sp.app.wboard.Board">
+		INSERT INTO wboard(bNum, name, pwd, cNum, title, content, ipAddr, 
+			groupNum, depth, orderNum, parent, hitCount, reg_date) 
+		VALUES(#{bNum}, #{name}, #{pwd}, #{cNum}, #{title}, #{content}, 
+			#{ipAddr}, #{groupNum}, #{depth}, #{orderNum}, #{parent}, 0, SYSDATE)
+	</insert>
+	
+	<select id="dataCount" parameterType="map" resultType="Integer">
+		SELECT COUNT(*) FROM wboard
+		<where>
+			<if test="keyword != null and keyword != ''">
+				<include refid="where-list"/>
+			</if>
+			<if test="cNum != 0">
+				AND cNum = #{cNum}
+			</if>
+		</where>
+	</select>
+	
+	<select id="listBoard" parameterType="map" resultType="com.sp.app.wboard.Board">
+		SELECT bNum, name, b.cNum, title, groupNum, depth, orderNum, parent, subject,
+			hitCount, TO_CHAR(reg_date, 'YYYY-MM-DD') reg_date
+		FROM wboard b
+		JOIN wCategory c ON b.cNum=c.cNum
+		<where>
+			<if test="keyword != null and keyword != ''">
+				<include refid="where-list"/>
+			</if>
+			<if test="cNum != 0">
+				AND b.cNum = #{cNum}
+			</if>
+		</where>
+		ORDER BY groupNum DESC, orderNum ASC
+		OFFSET #{offset} ROWS FETCH FIRST #{rows} ROWS ONLY
+	</select>
+	
+	<update id="updateHitCount" parameterType="Integer">
+		UPDATE wboard SET hitCount=hitCount+1 WHERE bNum=#{bNum}
+	</update>
+	
+	<select id="readBoard" parameterType="Integer" resultType="com.sp.app.wboard.Board">
+		SELECT bNum, name, pwd, b.cNum, subject, title, content, ipAddr,
+		    groupNum, depth, orderNum, parent, hitCount, reg_date
+		FROM wboard b
+		JOIN wCategory c ON b.cNum=c.cNum
+		WHERE bNum=#{bNum}
+	</select>
+	
+	<select id="preReadBoard" parameterType="map" resultType="com.sp.app.wboard.Board">
+		SELECT bNum, title
+		FROM wboard
+		<where>
+			<if test="keyword != null and keyword != ''">
+				<include refid="where-list"></include>
+			</if>
+			<if test="cNum != 0">
+				AND	cNum = #{cNum}
+			</if>
+			<![CDATA[
+				AND ( (groupNum = #{groupNum} AND orderNum < #{orderNum})
+					OR (groupNum > #{groupNum}) )
+			]]>
+			
+		</where>
+		ORDER BY groupNum ASC, orderNum DESC
+		FETCH FIRST 1 ROWS ONLY
+	</select>
+	
+	<select id="nextReadBoard" parameterType="map" resultType="com.sp.app.wboard.Board">
+		SELECT bNum, title
+		FROM wboard
+		<where>
+			<if test="keyword != null and keyword != ''">
+				<include refid="where-list"></include>
+			</if>
+			<if test="cNum != 0">
+				AND	cNum = #{cNum}
+			</if>
+			<![CDATA[
+				AND ( (groupNum = #{groupNum} AND orderNum > #{orderNum})
+					OR (groupNum < #{groupNum}) )
+			]]>
+			
+		</where>
+		ORDER BY groupNum DESC, orderNum ASC
+		FETCH FIRST 1 ROWS ONLY
+	</select>
+	
+	<update id="updateBoard" parameterType="com.sp.app.wboard.Board">
+		UPDATE wboard SET name=#{name}, pwd=#{pwd}, title=#{title}, content=#{content}
+		WHERE bNum=#{bNum}
+	</update>
+	
+	<delete id="deleteBoard" parameterType="Integer">
+		DELETE FROM wboard WHERE bNum IN 
+			(SELECT bNum FROM wboard START WITH bNum = ${bNum}
+				CONNECT BY PRIOR bNum = parent)
+	</delete>
+	
+	<select id="listCategory" resultType="com.sp.app.wboard.Board">
+		SELECT cNum, subject FROM wCategory ORDER BY cNum
+	</select>
+	
+	<update id="updateOrderNum" parameterType="map">
+		UPDATE wboard SET orderNum = orderNum+1 
+		WHERE groupNum = #{groupNum} AND orderNum &gt; #{orderNum}
+	</update>
+	
+</mapper>
